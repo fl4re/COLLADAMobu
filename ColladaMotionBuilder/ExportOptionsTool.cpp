@@ -115,6 +115,9 @@ public:
 		if (fileChooser.Execute())
 		{
 			// Recover the export options.
+			GetOptions()->useBoneList = false;
+			GetOptions()->exportOnlyAnimAndScene = false;
+			GetOptions()->exportBakedMatrix = false;
 			GetOptions()->exportTriangleStrips = (stripsCheckBox.State == 1);
 			GetOptions()->export3dData = (data3dCheckBox.State == 1);
 			GetOptions()->exportSystemCameras = (systemCamerasCheckBox.State == 1);
