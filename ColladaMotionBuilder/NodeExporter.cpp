@@ -249,7 +249,8 @@ void NodeExporter::ExportTransforms(FCDSceneNode* colladaNode, FBModel* node)
 	// Detect constraints.
 	FBModel* lookAtNode = node->LookAt;
 	FBModel* upOrientationNode = node->UpVector;
-	bool isConstrained = lookAtNode != NULL || upOrientationNode != NULL;
+
+	bool isConstrained = true;//lookAtNode != NULL || upOrientationNode != NULL;
 
 	if (node->Is(FBCamera::TypeInfo))
 	{
@@ -261,7 +262,7 @@ void NodeExporter::ExportTransforms(FCDSceneNode* colladaNode, FBModel* node)
 		transform = ToFMMatrix44(transform1);
 
 		transform = transform.Transposed().Inverted(); // Transpose because MotionBuilder is row-major.
-
+		
 		if (node->Parent != NULL)
 		{
 			// Take out the parent's transform and the known local transform.
