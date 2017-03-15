@@ -52,8 +52,10 @@ void MobuColladaExporter(const char* DAEName, int indexTake, py::list boneList)
 
 	GetOptions()->setBoneList(true);
 	GetOptions()->setExportingOnlyAnimAndScene(true);
-	GetOptions()->setExportingBakedMatrix(true);
-	GetOptions()->setForceSampling(true);
+	GetOptions()->setExportingBakedMatrix(false);
+	GetOptions()->setForceSampling(false);
+	GetOptions()->setCharacterControlerToRetrieveIK(true);
+
 	GetOptions()->setSamplingStart(ToSeconds(controller.LoopStart) / samplePeriod);
 	GetOptions()->setSamplingEnd(ToSeconds(controller.LoopStop) / samplePeriod);
 
@@ -107,7 +109,7 @@ void MobuColladaExporter(const char* DAEName, int indexTake, py::list boneList)
 	exporter->Complete();
 
 	//set original Take
-	global.CurrentTake = globalScene->Takes[previousIndexTake];
+		global.CurrentTake = globalScene->Takes[previousIndexTake];
 
 	FBTime t; t.SetSecondDouble(originalStart);
 	controller.Goto(t);
