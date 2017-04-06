@@ -72,6 +72,8 @@ bool AnimationExporter::IsAnimated(FBProperty* property)
 	return false;
 }
 
+
+// Translation
 void AnimationExporter::ExportProperty(FBProperty* property, FCDEntity* colladaEntity, FCDAnimated* animated, FCDConversionFunctor* functor)
 {
 	// Retrieve the list of curves for this property.
@@ -84,16 +86,6 @@ void AnimationExporter::ExportProperty(FBProperty* property, FCDEntity* colladaE
 	FCDAnimation* colladaAnimation = CDOC->GetAnimationLibrary()->AddEntity();
 	colladaAnimation->SetDaeId(colladaEntity->GetDaeId() + "-" + property->GetName());
 	FCDAnimationChannel* colladaChannel = colladaAnimation->AddChannel();
-	
-	if (createColladaAnimationClip)
-	{
-		colladaAnimationClip = CDOC->GetAnimationClipLibrary()->AddEntity();
-		FBSystem global;
-		fstring clipName(((global.CurrentTake)->Name.AsString()));
-		colladaAnimationClip->SetDaeId(clipName + fm::string("-clip"));
-
-		createColladaAnimationClip = false;
-	}
 
 	// Process each FBCurve and export it.
 	for (size_t i = 0; i < subNodeCount; ++i)
@@ -105,15 +97,31 @@ void AnimationExporter::ExportProperty(FBProperty* property, FCDEntity* colladaE
 		ExportCurve(curve, colladaCurve, functor);
 		animated->AddCurve(i, colladaCurve);
 
-		colladaAnimationClip->AddClipCurve(colladaCurve);
 
-		float startValue = ToSeconds(curve->Keys[0].Time);
-		float endValue = ToSeconds(curve->Keys[curve->Keys.GetCount() - 1].Time);
-		colladaAnimationClip->SetStart(startValue);
-		colladaAnimationClip->SetEnd(endValue);
+		if (GetOptions()->isExportingClipAnimation())
+		{
+			if (createColladaAnimationClip)
+			{
+				colladaAnimationClip = CDOC->GetAnimationClipLibrary()->AddEntity();
+				FBSystem global;
+				fstring clipName(((global.CurrentTake)->Name.AsString()));
+				colladaAnimationClip->SetDaeId(clipName + fm::string("-clip"));
+
+				createColladaAnimationClip = false;
+			}
+
+			colladaAnimationClip->AddClipCurve(colladaCurve);
+
+			float startValue = ToSeconds(curve->Keys[0].Time);
+			float endValue = ToSeconds(curve->Keys[curve->Keys.GetCount() - 1].Time);
+			colladaAnimationClip->SetStart(startValue);
+			colladaAnimationClip->SetEnd(endValue);
+		}
 	}
 }
 
+
+//Rotation
 void AnimationExporter::ExportProperty(FBProperty* property, size_t index, FCDEntity* colladaEntity, FCDAnimated* colladaAnimated, int animatedIndex, FCDConversionFunctor* functor)
 {
 	// Retrieve the list of curves for this property.
@@ -127,25 +135,29 @@ void AnimationExporter::ExportProperty(FBProperty* property, size_t index, FCDEn
 	colladaAnimation->SetDaeId(colladaEntity->GetDaeId() + "-" + property->GetName());
 	FCDAnimationChannel* colladaChannel = colladaAnimation->AddChannel();
 
-	if (createColladaAnimationClip)
-	{
-		colladaAnimationClip = CDOC->GetAnimationClipLibrary()->AddEntity();
-		FBSystem global;
-		fstring clipName(((global.CurrentTake)->Name.AsString()));
-		colladaAnimationClip->SetDaeId(clipName + fm::string("-clip"));
-		createColladaAnimationClip = false;
-	}
-	
 	// Export the curve.
 	FCDAnimationCurve* colladaCurve = colladaChannel->AddCurve();
 	ExportCurve(exportCurve, colladaCurve, functor);
 	colladaAnimated->AddCurve(animatedIndex, colladaCurve);
 
-	colladaAnimationClip->AddClipCurve(colladaCurve);
-	float startValue = ToSeconds(exportCurve->Keys[0].Time);
-	float endValue = ToSeconds(exportCurve->Keys[exportCurve->Keys.GetCount() - 1].Time);
-	colladaAnimationClip->SetStart(startValue);
-	colladaAnimationClip->SetEnd(endValue);
+
+	if (GetOptions()->isExportingClipAnimation())
+	{
+		if (createColladaAnimationClip)
+		{
+			colladaAnimationClip = CDOC->GetAnimationClipLibrary()->AddEntity();
+			FBSystem global;
+			fstring clipName(((global.CurrentTake)->Name.AsString()));
+			colladaAnimationClip->SetDaeId(clipName + fm::string("-clip"));
+			createColladaAnimationClip = false;
+		}
+
+		colladaAnimationClip->AddClipCurve(colladaCurve);
+		float startValue = ToSeconds(exportCurve->Keys[0].Time);
+		float endValue = ToSeconds(exportCurve->Keys[exportCurve->Keys.GetCount() - 1].Time);
+		colladaAnimationClip->SetStart(startValue);
+		colladaAnimationClip->SetEnd(endValue);
+	}
 }
 
 void AnimationExporter::GetPropertyCurves(FBProperty* property, FBCurveList& curveList, int maxCount)
@@ -412,7 +424,7 @@ void AnimationExporter::DoSampling()
 			if (ANIM->IsAnimated(&node->Translation) || !IsEquivalent(ToFMVector3(node->Translation), FMVector3::Zero))
 			{
 				FCDTTranslation* translation = new FCDTTranslation(nullptr, NULL);
-				translation->SetTranslation(ToFMVector3(node->Translation));
+				translation->SetTranslation(ToFMVector3(node->Translation)*GetOptions()->getScaleUnit());
 				Trans = translation->ToMatrix();
 				delete translation;
 				translation = NULL;
@@ -492,6 +504,8 @@ void AnimationExporter::TerminateSampling()
 void AnimationExporter::TerminateSampling(FCDAnimated* animated)
 {
 	size_t valueCount = animated->GetValueCount();
+	bool AddedCurveToAnimationClip = false;
+
 	for (size_t i = 0; i < valueCount; ++i)
 	{
 		bool isCurveValid = false;
@@ -504,6 +518,31 @@ void AnimationExporter::TerminateSampling(FCDAnimated* animated)
 			for (size_t j = 1; j < keyCount && !isCurveValid; ++j)
 			{
 				isCurveValid = !IsEquivalent(value, curve->GetKey(j)->output);
+			}
+		}
+
+		if (GetOptions()->isExportingClipAnimation())
+		{
+			if (isCurveValid && !AddedCurveToAnimationClip)
+			{
+				if (createColladaAnimationClip)
+				{
+					colladaAnimationClip = CDOC->GetAnimationClipLibrary()->AddEntity();
+					FBSystem global;
+					fstring clipName(((global.CurrentTake)->Name.AsString()));
+					colladaAnimationClip->SetDaeId(clipName + fm::string("-clip"));
+
+					createColladaAnimationClip = false;
+				}
+
+				colladaAnimationClip->AddClipCurve(curve);
+
+				float startValue = curve->GetKey(0)->input;
+				float endValue = curve->GetKey(curve->GetKeyCount() - 1)->input;
+				colladaAnimationClip->SetStart(startValue);
+				colladaAnimationClip->SetEnd(endValue);
+
+				AddedCurveToAnimationClip = true;
 			}
 		}
 
