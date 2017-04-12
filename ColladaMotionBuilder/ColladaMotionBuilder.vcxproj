@@ -277,22 +277,22 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MB14.0 Debug|x64'">
     <IgnoreImportLibrary>true</IgnoreImportLibrary>
     <LinkIncremental>true</LinkIncremental>
-    <TargetExt>.dll</TargetExt>
+    <TargetExt>.pyd</TargetExt>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MB17.0 Debug|x64'">
     <IgnoreImportLibrary>true</IgnoreImportLibrary>
     <LinkIncremental>true</LinkIncremental>
-    <TargetExt>.dll</TargetExt>
+    <TargetExt>.pyd</TargetExt>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MB17.0 Release|x64'">
     <IgnoreImportLibrary>true</IgnoreImportLibrary>
     <LinkIncremental>true</LinkIncremental>
-    <TargetExt>.dll</TargetExt>
+    <TargetExt>.pyd</TargetExt>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MB14.0 Release|x64'">
     <IgnoreImportLibrary>true</IgnoreImportLibrary>
     <LinkIncremental>true</LinkIncremental>
-    <TargetExt>.dll</TargetExt>
+    <TargetExt>.pyd</TargetExt>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='MB7.5 Release|Win32'">
     <Midl>
@@ -790,7 +790,7 @@
     </ResourceCompile>
     <Link>
       <AdditionalDependencies>fbsdk.lib;fbxsdk.lib;opengl32.lib;glu32.lib;boost_python-py27-vc100-mt-1_46_1.lib;pyfbsdk.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <OutputFile>$(OutDir)ColladaMotionBuilder.dll</OutputFile>
+      <OutputFile>$(OutDir)ColladaMotionBuilder.pyd</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <AdditionalLibraryDirectories>$(MOTIONBUILDER_PATH_2014)\OpenRealitySDK\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -798,7 +798,7 @@
     <PostBuildEvent>
       <Message>Installing plug-in...</Message>
       <Command>copy "$(TargetPath)" "$(MOTIONBUILDER_PATH_2014)\bin\x64\plugins"
-move /y "$(MOTIONBUILDER_PATH_2014)\bin\x64\plugins\$(TargetName).dll" "$(MOTIONBUILDER_PATH_2014)\bin\x64\plugins\$(TargetName).pyd"
+
 </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
@@ -830,7 +830,7 @@ move /y "$(MOTIONBUILDER_PATH_2014)\bin\x64\plugins\$(TargetName).dll" "$(MOTION
     </ResourceCompile>
     <Link>
       <AdditionalDependencies>fbsdk.lib;fbxsdk.lib;opengl32.lib;glu32.lib;boost_python-vc110-mt-1_55.lib;pyfbsdk.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <OutputFile>$(OutDir)ColladaMotionBuilder.dll</OutputFile>
+      <OutputFile>$(OutDir)ColladaMotionBuilder.pyd</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <AdditionalLibraryDirectories>$(MOTIONBUILDER_PATH_2017)\OpenRealitySDK\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -838,7 +838,6 @@ move /y "$(MOTIONBUILDER_PATH_2014)\bin\x64\plugins\$(TargetName).dll" "$(MOTION
     <PostBuildEvent>
       <Message>Installing plug-in...</Message>
       <Command>copy "$(TargetPath)" "$(MOTIONBUILDER_PATH_2017)\bin\x64\plugins"
-move /y "$(MOTIONBUILDER_PATH_2017)\bin\x64\plugins\$(TargetName).dll" "$(MOTIONBUILDER_PATH_2017)\bin\x64\plugins\$(TargetName).pyd"
 </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
@@ -870,7 +869,7 @@ move /y "$(MOTIONBUILDER_PATH_2017)\bin\x64\plugins\$(TargetName).dll" "$(MOTION
     </ResourceCompile>
     <Link>
       <AdditionalDependencies>fbsdk.lib;fbxsdk.lib;opengl32.lib;glu32.lib;boost_python-vc110-mt-1_55.lib;pyfbsdk.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <OutputFile>$(OutDir)ColladaMotionBuilder.dll</OutputFile>
+      <OutputFile>$(OutDir)ColladaMotionBuilder.pyd</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <AdditionalLibraryDirectories>$(MOTIONBUILDER_PATH_2017)\OpenRealitySDK\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -878,7 +877,7 @@ move /y "$(MOTIONBUILDER_PATH_2017)\bin\x64\plugins\$(TargetName).dll" "$(MOTION
     <PostBuildEvent>
       <Message>Installing plug-in...</Message>
       <Command>copy "$(TargetPath)" "$(MOTIONBUILDER_PATH_2017)\bin\x64\plugins"
-move /y "$(MOTIONBUILDER_PATH_2017)\bin\x64\plugins\$(TargetName).dll" "$(MOTIONBUILDER_PATH_2017)\bin\x64\plugins\$(TargetName).pyd"
+
 </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
@@ -910,7 +909,7 @@ move /y "$(MOTIONBUILDER_PATH_2017)\bin\x64\plugins\$(TargetName).dll" "$(MOTION
     </ResourceCompile>
     <Link>
       <AdditionalDependencies>fbsdk.lib;fbxsdk.lib;opengl32.lib;glu32.lib;boost_python-py27-vc100-mt-1_46_1.lib;pyfbsdk.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <OutputFile>$(OutDir)ColladaMotionBuilder.dll</OutputFile>
+      <OutputFile>$(OutDir)ColladaMotionBuilder.pyd</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <AdditionalLibraryDirectories>$(MOTIONBUILDER_PATH_2014)\OpenRealitySDK\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -918,7 +917,7 @@ move /y "$(MOTIONBUILDER_PATH_2017)\bin\x64\plugins\$(TargetName).dll" "$(MOTION
     <PostBuildEvent>
       <Message>Installing plug-in...</Message>
       <Command>copy "$(TargetPath)" "$(MOTIONBUILDER_PATH_2014)\bin\x64\plugins"
-move /y "$(MOTIONBUILDER_PATH_2014)\bin\x64\plugins\$(TargetName).dll" "$(MOTIONBUILDER_PATH_2014)\bin\x64\plugins\$(TargetName).pyd"
+
 </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
@@ -961,6 +960,7 @@ move /y "$(MOTIONBUILDER_PATH_2014)\bin\x64\plugins\$(TargetName).dll" "$(MOTION
     <ClInclude Include="AnimationExporter.h" />
     <ClInclude Include="CameraExporter.h" />
     <ClInclude Include="ColladaExporter.h" />
+    <ClInclude Include="ColladaVersionInfo.h" />
     <ClInclude Include="ControllerExporter.h" />
     <ClInclude Include="EntityExporter.h" />
     <ClInclude Include="GeometryExporter.h" />

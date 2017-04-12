@@ -190,21 +190,30 @@ FCDSceneNode* NodeExporter::ExportNode(FCDSceneNode* colladaParent, FBModel* nod
 #ifdef DEBUG_MOBU
 				if (entity->Selected)
 #else
-				if (VecName == name)
-#endif
+				std::size_t found = fullName.find_first_of("::");
+				fm::string fullNameToCompare = (fullName.substr(found+2));
+				if (VecName == fullNameToCompare)
 				{
-					std::size_t found = std::string::npos;
-					for (fm::vector<fm::string>::iterator it = GetCharactersNamespace()->begin(); it != GetCharactersNamespace()->end(); ++it)
-					{
-						found = fullName.find(*it);
-					}
-
-					if (found == std::string::npos)
-					{
-						colladaNode->SetExported(true);
-						break;
-					}
+					colladaNode->SetExported(true);
+					break;
 				}
+					
+
+//				if (VecName == name)
+#endif
+				//{
+				//	std::size_t found = std::string::npos;
+				//	for (fm::vector<fm::string>::iterator it = GetCharactersNamespace()->begin(); it != GetCharactersNamespace()->end(); ++it)
+				//	{
+				//		found = fullName.find(*it);
+				//	}
+
+				//	if (found == std::string::npos)
+				//	{
+				//		colladaNode->SetExported(true);
+				//		break;
+				//	}
+				//}
 			}
 		}
 

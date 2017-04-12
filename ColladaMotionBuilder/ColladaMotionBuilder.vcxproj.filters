@@ -108,5 +108,8 @@
     <ClInclude Include="py_function.h">
       <Filter>Python</Filter>
     </ClInclude>
+    <ClInclude Include="ColladaVersionInfo.h">
+      <Filter>Exporter</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

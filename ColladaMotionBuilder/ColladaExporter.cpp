@@ -17,6 +17,7 @@
 #include "LightExporter.h"
 #include "MaterialExporter.h"
 #include "NodeExporter.h"
+#include "ColladaVersionInfo.h"
 
 //
 // ColladaExporter
@@ -104,6 +105,10 @@ void ColladaExporter::ExportAsset()
     builder.append((fchar) '.');
 	builder.append(version / 10); builder.append(version % 10);
     builder.append(FCOLLADA_BUILDSTR);
+
+	builder.append(FC(" | "));
+	builder.append(COLLADA::CURRENT_REVISION);
+
 	fm::string authoringTool = builder.ToString();
 	contributor->SetAuthoringTool(TO_FSTRING(authoringTool));
 
