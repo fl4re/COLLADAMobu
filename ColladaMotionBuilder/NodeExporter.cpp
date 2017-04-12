@@ -196,24 +196,8 @@ FCDSceneNode* NodeExporter::ExportNode(FCDSceneNode* colladaParent, FBModel* nod
 				{
 					colladaNode->SetExported(true);
 					break;
-				}
-					
-
-//				if (VecName == name)
+				}			
 #endif
-				//{
-				//	std::size_t found = std::string::npos;
-				//	for (fm::vector<fm::string>::iterator it = GetCharactersNamespace()->begin(); it != GetCharactersNamespace()->end(); ++it)
-				//	{
-				//		found = fullName.find(*it);
-				//	}
-
-				//	if (found == std::string::npos)
-				//	{
-				//		colladaNode->SetExported(true);
-				//		break;
-				//	}
-				//}
 			}
 		}
 
