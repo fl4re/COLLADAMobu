@@ -17,6 +17,7 @@
 #include "LightExporter.h"
 #include "MaterialExporter.h"
 #include "NodeExporter.h"
+#include "ColladaVersionInfo.h"
 
 //
 // ColladaExporter
@@ -62,6 +63,8 @@ void ColladaExporter::Export(const fchar* filename)
 	materialExporter = new MaterialExporter(this);
 	nodeExporter = new NodeExporter(this);
 
+	nodeExporter->SetBoneListToExport(&boneNameExported);
+
 	// Export the library entities.
 	FBSystem global; // think of FBSystem as a function set, rather than an object.
 	FBScene* globalScene = global.Scene;
@@ -102,6 +105,10 @@ void ColladaExporter::ExportAsset()
     builder.append((fchar) '.');
 	builder.append(version / 10); builder.append(version % 10);
     builder.append(FCOLLADA_BUILDSTR);
+
+	builder.append(FC(" | "));
+	builder.append(COLLADA::CURRENT_REVISION);
+
 	fm::string authoringTool = builder.ToString();
 	contributor->SetAuthoringTool(TO_FSTRING(authoringTool));
 
@@ -122,7 +129,16 @@ void ColladaExporter::ExportAsset()
 	//-----
 
 	// System units
-	// asset->SetUnitConversionFactor(0.01f);
+	if (GetOptions()->getScaleUnit() == ScaleCMToMeter)
+	{
+		asset->SetUnitConversionFactor(1.0f);
+		asset->SetUnitName(FC("meter"));
+	}
+	else if (GetOptions()->getScaleUnit() == ScaleMeterToCM)
+	{
+		asset->SetUnitConversionFactor(0.01f);
+		asset->SetUnitName(FC("centimeter"));
+	}
 
 	// System up-axis
 	// asset->SetUpAxis(FMVector3::YAxis);

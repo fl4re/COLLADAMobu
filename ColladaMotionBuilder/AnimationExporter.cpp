@@ -18,7 +18,11 @@
 #include "FCDocument/FCDAnimationKey.h"
 #include "FCDocument/FCDEntity.h"
 #include "FCDocument/FCDLibrary.h"
+#include "FCDocument/FCDAnimationClip.h"
 
+#include "FCDocument/FCDTransform.h"
+#include "FCDocument/FCDSceneNode.h"
+#include "FCDocument/FCDObject.h"
 //
 // Helpers
 //
@@ -68,6 +72,8 @@ bool AnimationExporter::IsAnimated(FBProperty* property)
 	return false;
 }
 
+
+// Translation
 void AnimationExporter::ExportProperty(FBProperty* property, FCDEntity* colladaEntity, FCDAnimated* animated, FCDConversionFunctor* functor)
 {
 	// Retrieve the list of curves for this property.
@@ -80,7 +86,7 @@ void AnimationExporter::ExportProperty(FBProperty* property, FCDEntity* colladaE
 	FCDAnimation* colladaAnimation = CDOC->GetAnimationLibrary()->AddEntity();
 	colladaAnimation->SetDaeId(colladaEntity->GetDaeId() + "-" + property->GetName());
 	FCDAnimationChannel* colladaChannel = colladaAnimation->AddChannel();
-	
+
 	// Process each FBCurve and export it.
 	for (size_t i = 0; i < subNodeCount; ++i)
 	{
@@ -90,9 +96,32 @@ void AnimationExporter::ExportProperty(FBProperty* property, FCDEntity* colladaE
 		FCDAnimationCurve* colladaCurve = colladaChannel->AddCurve();
 		ExportCurve(curve, colladaCurve, functor);
 		animated->AddCurve(i, colladaCurve);
+
+
+		if (GetOptions()->isExportingClipAnimation())
+		{
+			if (createColladaAnimationClip)
+			{
+				colladaAnimationClip = CDOC->GetAnimationClipLibrary()->AddEntity();
+				FBSystem global;
+				fstring clipName(((global.CurrentTake)->Name.AsString()));
+				colladaAnimationClip->SetDaeId(clipName + fm::string("-clip"));
+
+				createColladaAnimationClip = false;
+			}
+
+			colladaAnimationClip->AddClipCurve(colladaCurve);
+
+			float startValue = ToSeconds(curve->Keys[0].Time);
+			float endValue = ToSeconds(curve->Keys[curve->Keys.GetCount() - 1].Time);
+			colladaAnimationClip->SetStart(startValue);
+			colladaAnimationClip->SetEnd(endValue);
+		}
 	}
 }
 
+
+//Rotation
 void AnimationExporter::ExportProperty(FBProperty* property, size_t index, FCDEntity* colladaEntity, FCDAnimated* colladaAnimated, int animatedIndex, FCDConversionFunctor* functor)
 {
 	// Retrieve the list of curves for this property.
@@ -105,11 +134,30 @@ void AnimationExporter::ExportProperty(FBProperty* property, size_t index, FCDEn
 	FCDAnimation* colladaAnimation = CDOC->GetAnimationLibrary()->AddEntity();
 	colladaAnimation->SetDaeId(colladaEntity->GetDaeId() + "-" + property->GetName());
 	FCDAnimationChannel* colladaChannel = colladaAnimation->AddChannel();
-	
+
 	// Export the curve.
 	FCDAnimationCurve* colladaCurve = colladaChannel->AddCurve();
 	ExportCurve(exportCurve, colladaCurve, functor);
 	colladaAnimated->AddCurve(animatedIndex, colladaCurve);
+
+
+	if (GetOptions()->isExportingClipAnimation())
+	{
+		if (createColladaAnimationClip)
+		{
+			colladaAnimationClip = CDOC->GetAnimationClipLibrary()->AddEntity();
+			FBSystem global;
+			fstring clipName(((global.CurrentTake)->Name.AsString()));
+			colladaAnimationClip->SetDaeId(clipName + fm::string("-clip"));
+			createColladaAnimationClip = false;
+		}
+
+		colladaAnimationClip->AddClipCurve(colladaCurve);
+		float startValue = ToSeconds(exportCurve->Keys[0].Time);
+		float endValue = ToSeconds(exportCurve->Keys[exportCurve->Keys.GetCount() - 1].Time);
+		colladaAnimationClip->SetStart(startValue);
+		colladaAnimationClip->SetEnd(endValue);
+	}
 }
 
 void AnimationExporter::GetPropertyCurves(FBProperty* property, FBCurveList& curveList, int maxCount)
@@ -278,18 +326,112 @@ void AnimationExporter::DoSampling()
 
 		// Take a sample.
 		FMMatrix44 t;
+		FBMatrix t1;
 		if (node->Is(FBCamera::TypeInfo))
 		{
 			// Cameras are special and nasty nodes.
 			FMMatrix44 parentTransform = NODE->GetParentTransform(node->Parent, false);
-			t = ((FBCamera*)node)->GetMatrix(kFBModelView);
+
+
+//			t = ((FBCamera*)node)->GetMatrix(kFBModelView);
+			((FBCamera*)node)->GetCameraMatrix(t1, kFBModelView);
+			t = ToFMMatrix44(t1);
+
 			t = parentTransform.Inverted() * t.Transposed().Inverted();
 		}
 		else
 		{
+			/*
 			FBMatrix localTransformation;
 			node->GetMatrix(localTransformation, kModelTransformation, false);
 			t = ToFMMatrix44(localTransformation);
+			*/
+
+			enum Values
+			{
+				EulerXYZ = 0,
+				EulerXZY,
+				EulerYZX,
+				EulerYXZ,
+				EulerZXY,
+				EulerZYX,
+				SphericXYZ
+			};
+
+			// Get Pre Rotation
+			int rotationOrder;
+			FMVector3 preRotation, postRotation, scalePivotUpdateOffset, rotationPivot, scalePivot, rotationOffset, scaleOffset;
+			bool isRotationDOFActive, isMotionBuilder55Limits;
+
+			const int* orderedRotationIndices;
+			const FMVector3* rotationAxises[3] = { &FMVector3::XAxis, &FMVector3::YAxis, &FMVector3::ZAxis };
+
+
+			GetPropertyValue(node, "PreRotation", preRotation);
+			GetPropertyValue(node, "RotationOrder", rotationOrder);
+			GetPropertyValue(node, "RotationOffset", rotationOffset);
+			GetPropertyValue(node, "RotationActive", isRotationDOFActive);
+			GetPropertyValue(node, "RotationSpaceForLimitOnly", isMotionBuilder55Limits);
+
+
+			switch ((Values)rotationOrder)
+			{
+			case EulerXYZ:
+			case SphericXYZ: { static const int x[3] = { 0, 1, 2 }; orderedRotationIndices = x; break; }
+			case EulerXZY: { static const int x[3] = { 0, 2, 1 }; orderedRotationIndices = x; break; }
+			case EulerYZX: { static const int x[3] = { 1, 2, 0 }; orderedRotationIndices = x; break; }
+			case EulerYXZ: { static const int x[3] = { 1, 0, 2 }; orderedRotationIndices = x; break; }
+			case EulerZXY: { static const int x[3] = { 2, 0, 1 }; orderedRotationIndices = x; break; }
+			case EulerZYX: { static const int x[3] = { 2, 1, 0 }; orderedRotationIndices = x; break; }
+			default: { static const int x[3] = { 0, 1, 2 }; FUFail(orderedRotationIndices = x); break; }
+			}
+
+
+			FMMatrix44 PreRot = FMMatrix44::Identity;
+			if (!isMotionBuilder55Limits && isRotationDOFActive && !IsEquivalent(preRotation, FMVector3::Zero))
+			{
+				for (int i = 2; i >= 0; --i)
+				{
+					//new FCDTRotation(document, parent);
+					FCDTRotation* rotation = new FCDTRotation(nullptr, NULL);
+					rotation->SetAxis(*rotationAxises[orderedRotationIndices[i]]);
+					rotation->SetAngle(preRotation[orderedRotationIndices[i]]);
+
+					PreRot *= rotation->ToMatrix();
+					delete rotation;
+					rotation = NULL;
+				}
+			}
+
+			FMMatrix44 Rot = FMMatrix44::Identity;
+			// Animatable node rotation
+			if (ANIM->IsAnimated(&node->Rotation) || !IsEquivalent(ToFMVector3(node->Rotation), FMVector3::Zero))
+			{
+				FMVector3 angles = ToFMVector3(node->Rotation);
+				for (int i = 2; i >= 0; --i)
+				{
+					FCDTRotation* rotation = new FCDTRotation(nullptr, NULL);
+					rotation->SetAxis(*rotationAxises[orderedRotationIndices[i]]);
+					rotation->SetAngle(angles[orderedRotationIndices[i]]);
+					Rot *= rotation->ToMatrix();
+					delete rotation;
+					rotation = NULL;
+				}
+			}
+
+			// Translation
+			FMMatrix44 Trans = FMMatrix44::Identity;
+			if (ANIM->IsAnimated(&node->Translation) || !IsEquivalent(ToFMVector3(node->Translation), FMVector3::Zero))
+			{
+				FCDTTranslation* translation = new FCDTTranslation(nullptr, NULL);
+				translation->SetTranslation(ToFMVector3(node->Translation)*GetOptions()->getScaleUnit());
+				Trans = translation->ToMatrix();
+				delete translation;
+				translation = NULL;
+			}
+
+			// only compliant with JointOrient + Rotation + Translation for a singe joint
+			t = Trans * PreRot * Rot;
 		}
 
 		// Write out the matrix values.
@@ -328,9 +470,9 @@ void AnimationExporter::DoSampling()
 
 			// Not animatables:
 		case kFBPT_unknown: case kFBPT_charptr: case kFBPT_enum: case kFBPT_Time:
-		case kFBPT_String: case kFBPT_object: case kFBPT_event: case kFBPT_stringlist:
+		/*case kFBPT_String:*/ case kFBPT_object: case kFBPT_event: case kFBPT_stringlist:
 		case kFBPT_Action: case kFBPT_Reference: case kFBPT_TimeSpan: case kFBPT_kReference:
-		case kFBPT_last: default: break;
+		/*case kFBPT_last:*/ default: break;
 		}
 
 		++it;
@@ -362,6 +504,8 @@ void AnimationExporter::TerminateSampling()
 void AnimationExporter::TerminateSampling(FCDAnimated* animated)
 {
 	size_t valueCount = animated->GetValueCount();
+	bool AddedCurveToAnimationClip = false;
+
 	for (size_t i = 0; i < valueCount; ++i)
 	{
 		bool isCurveValid = false;
@@ -374,6 +518,31 @@ void AnimationExporter::TerminateSampling(FCDAnimated* animated)
 			for (size_t j = 1; j < keyCount && !isCurveValid; ++j)
 			{
 				isCurveValid = !IsEquivalent(value, curve->GetKey(j)->output);
+			}
+		}
+
+		if (GetOptions()->isExportingClipAnimation())
+		{
+			if (isCurveValid && !AddedCurveToAnimationClip)
+			{
+				if (createColladaAnimationClip)
+				{
+					colladaAnimationClip = CDOC->GetAnimationClipLibrary()->AddEntity();
+					FBSystem global;
+					fstring clipName(((global.CurrentTake)->Name.AsString()));
+					colladaAnimationClip->SetDaeId(clipName + fm::string("-clip"));
+
+					createColladaAnimationClip = false;
+				}
+
+				colladaAnimationClip->AddClipCurve(curve);
+
+				float startValue = curve->GetKey(0)->input;
+				float endValue = curve->GetKey(curve->GetKeyCount() - 1)->input;
+				colladaAnimationClip->SetStart(startValue);
+				colladaAnimationClip->SetEnd(endValue);
+
+				AddedCurveToAnimationClip = true;
 			}
 		}
 

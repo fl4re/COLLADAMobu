@@ -21,6 +21,7 @@
 #include "FCDocument/FCDGeometryInstance.h"
 #include "FCDocument/FCDSceneNode.h"
 #include "FCDocument/FCDSkinController.h"
+#include "FCDocument/FCDAnimationCurve.h"
 
 //
 // NodeExporter
@@ -64,8 +65,8 @@ void NodeExporter::PreprocessScene(FBScene* _scene)
 		FBGeometry* geometry = node->Geometry;
 		if (geometry != NULL && geometry->VertexCount() > 0)
 		{
-			FBCluster cluster(node);
-			if (cluster.LinkGetCount() > 0)
+			FBCluster* cluster = node->Cluster;
+			if (cluster->LinkGetCount() > 0)
 			{
 				node->SetMatrix(identity, kModelTransformation, true);
 				node->IsDeformable = false;
@@ -102,8 +103,8 @@ void NodeExporter::PostprocessScene(FBScene* scene)
 			bool isDeformable = node->IsDeformable;
 			node->IsDeformable = true;
 
-			FBCluster cluster(node);
-			if (cluster.LinkGetCount() > 0)
+			FBCluster* cluster = node->Cluster;
+			if (cluster->LinkGetCount() > 0)
 			{
 				isDeformable = true;
 				doEvaluate = true;
@@ -125,6 +126,10 @@ void NodeExporter::ExportScene(FBScene* _scene)
 	exportedNodes.insert(scene->RootModel, CountedNode(colladaScene, 1));
 	ExportEntity(colladaScene, scene->RootModel);
 	
+	// Initialize AnimClip
+	ANIM->colladaAnimationClip = NULL;
+	ANIM->createColladaAnimationClip = true;
+
 	// Export its children.
 	int childCount = scene->RootModel->Children.GetCount();
 	for (int i = 0; i < childCount; ++i)
@@ -163,10 +168,61 @@ FCDSceneNode* NodeExporter::ExportNode(FCDSceneNode* colladaParent, FBModel* nod
 		// Create the FCollada node.
 		FCDSceneNode* createUnder = (instantiate) ? colladaParent : colladaScene;
 		colladaNode = createUnder->AddChildNode();
+
+		// check if we want to export this node
+		FBComponent* entity = (FBComponent*)node;
+		fm::string fullName = (const char*)entity->GetFullName();
+		fm::string name = (const char*)entity->Name;
+
+
+		colladaNode->SetExported(true);
+
+		if (GetOptions()->isUsingBoneList())
+		{
+			colladaNode->SetExported(false);
+
+			for (fm::vector<const char*>::iterator it = boneNameExported->begin(); it != boneNameExported->end(); ++it)
+			{
+				fm::string VecName(*it);
+
+//#define DEBUG_MOBU
+
+#ifdef DEBUG_MOBU
+				if (entity->Selected)
+#else
+				std::size_t found = fullName.find_first_of("::");
+				fm::string fullNameToCompare = (fullName.substr(found+2));
+				if (VecName == fullNameToCompare)
+				{
+					colladaNode->SetExported(true);
+					break;
+				}
+					
+
+//				if (VecName == name)
+#endif
+				//{
+				//	std::size_t found = std::string::npos;
+				//	for (fm::vector<fm::string>::iterator it = GetCharactersNamespace()->begin(); it != GetCharactersNamespace()->end(); ++it)
+				//	{
+				//		found = fullName.find(*it);
+				//	}
+
+				//	if (found == std::string::npos)
+				//	{
+				//		colladaNode->SetExported(true);
+				//		break;
+				//	}
+				//}
+			}
+		}
+
+
 		ExportEntity(colladaNode, node);
 		exportedNodes.insert(node, CountedNode(colladaNode, instantiate ? 1 : 0));
+
 	}
-	else 
+	else
 	{
 		if (it->second.second == 0 && instantiate)
 		{
@@ -191,8 +247,12 @@ FCDSceneNode* NodeExporter::ExportNode(FCDSceneNode* colladaParent, FBModel* nod
 	}
 
 	// Export the local instance and the transforms.
-	ExportTransforms(colladaNode, node);
-	ExportInstance(colladaNode, node);
+	if (colladaNode->IsExported())
+	{
+		ExportTransforms(colladaNode, node);
+		ExportInstance(colladaNode, node);
+	}
+
 	return colladaNode;
 }
 
@@ -209,7 +269,7 @@ void NodeExporter::ExportInstance(FCDSceneNode* colladaNode, FBModel* node)
 			if (node->Children.GetCount() > 0)
 			{
 				colladaNode = colladaNode->AddChildNode();
-				colladaNode->SetDaeId(fm::string((char*) node->Name) + "-pivot");
+				colladaNode->SetDaeId(fm::string((char*) node->Name.AsString()) + "-pivot");
 			}
 			FCDTRotation* pivotRotation = (FCDTRotation*) colladaNode->AddTransform(FCDTransform::ROTATION);
 			pivotRotation->SetAxis(FMVector3::XAxis);
@@ -224,13 +284,14 @@ void NodeExporter::ExportInstance(FCDSceneNode* colladaNode, FBModel* node)
 	else if (node->Is(FBModelPath3D::TypeInfo)) {} // Spline?
 	else if (node->Is(FBModelRoot::TypeInfo)) { FUFail(""); } // should not happen.
 	else if (node->Is(FBModelSkeleton::TypeInfo)) colladaNode->SetJointFlag(true);
-	else 
+	else
 	{
 		// This should be a mesh: these are exported through the controller exporter.
 		FBGeometry* geometry = node->Geometry;
 		if (geometry->VertexCount() > 0)
 		{
-			entity = CTRL->ExportController(node, geometry);
+			if (!GetOptions()->isExportingOnlyAnimAndScene())
+				entity = CTRL->ExportController(node, geometry);
 		}
 	}
 
@@ -240,7 +301,7 @@ void NodeExporter::ExportInstance(FCDSceneNode* colladaNode, FBModel* node)
 		FCDSceneNode* colladaPivot = ExportPivot(colladaNode, node); // may return the colladaNode if not pivoted.
 		FCDEntityInstance* instance = colladaPivot->AddInstance(entity);
 		if (instance->HasType(FCDGeometryInstance::GetClassType())) GEOM->ExportGeometryInstance(node, (FCDGeometryInstance*) instance, entity);
-		if (instance->HasType(FCDControllerInstance::GetClassType())) CTRL->ExportControllerInstance(node, (FCDControllerInstance*) instance, entity);
+		if (instance->HasType(FCDControllerInstance::GetClassType()) && (!GetOptions()->isExportingOnlyAnimAndScene())) CTRL->ExportControllerInstance(node, (FCDControllerInstance*)instance, entity);
 	}
 }
 
@@ -249,12 +310,18 @@ void NodeExporter::ExportTransforms(FCDSceneNode* colladaNode, FBModel* node)
 	// Detect constraints.
 	FBModel* lookAtNode = node->LookAt;
 	FBModel* upOrientationNode = node->UpVector;
+
 	bool isConstrained = lookAtNode != NULL || upOrientationNode != NULL;
 
 	if (node->Is(FBCamera::TypeInfo))
 	{
 		FBCamera* camera = (FBCamera*) node;
-		FMMatrix44 transform = camera->GetMatrix(kFBModelView);
+		FMMatrix44 transform;
+
+		FBMatrix transform1;
+		camera->GetCameraMatrix(transform1, kFBModelView);
+		transform = ToFMMatrix44(transform1);
+
 		transform = transform.Transposed().Inverted(); // Transpose because MotionBuilder is row-major.
 		
 		if (node->Parent != NULL)
@@ -279,19 +346,103 @@ void NodeExporter::ExportTransforms(FCDSceneNode* colladaNode, FBModel* node)
 			return;
 		}
 	}
-	
-	if (isConstrained)
+
+	if (isConstrained || GetOptions()->isExportingBakedMatrix())
 	{
+
+		/*
 		FBMatrix localTransform;
 		node->GetMatrix(localTransform, kModelTransformation, false);
 		FCDTMatrix* colladaTranform = (FCDTMatrix*) colladaNode->AddTransform(FCDTransform::MATRIX);
 		colladaTranform->SetTransform(ToFMMatrix44(localTransform));
 		ANIM->AddModelToSample(node, colladaNode, colladaTranform->GetTransform());
+		*/
+
+		// Get Pre Rotation
+		int rotationOrder;
+		FMVector3 preRotation, postRotation, scalePivotUpdateOffset, rotationPivot, scalePivot, rotationOffset, scaleOffset;
+		bool isRotationDOFActive, isMotionBuilder55Limits;
+
+		const int* orderedRotationIndices;
+		const FMVector3* rotationAxises[3] = { &FMVector3::XAxis, &FMVector3::YAxis, &FMVector3::ZAxis };
+
+
+		GetPropertyValue(node, "PreRotation", preRotation);
+		GetPropertyValue(node, "RotationOrder", rotationOrder);
+		GetPropertyValue(node, "RotationOffset", rotationOffset);
+		GetPropertyValue(node, "RotationActive", isRotationDOFActive);
+		GetPropertyValue(node, "RotationSpaceForLimitOnly", isMotionBuilder55Limits);
+
+
+		switch ((Values)rotationOrder)
+		{
+			case EulerXYZ:
+			case SphericXYZ: { static const int x[3] = { 0, 1, 2 }; orderedRotationIndices = x; break; }
+			case EulerXZY: { static const int x[3] = { 0, 2, 1 }; orderedRotationIndices = x; break; }
+			case EulerYZX: { static const int x[3] = { 1, 2, 0 }; orderedRotationIndices = x; break; }
+			case EulerYXZ: { static const int x[3] = { 1, 0, 2 }; orderedRotationIndices = x; break; }
+			case EulerZXY: { static const int x[3] = { 2, 0, 1 }; orderedRotationIndices = x; break; }
+			case EulerZYX: { static const int x[3] = { 2, 1, 0 }; orderedRotationIndices = x; break; }
+			default: { static const int x[3] = { 0, 1, 2 }; FUFail(orderedRotationIndices = x); break; }
+		}
+
+		FMMatrix44 PreRot = FMMatrix44::Identity;
+		if (!isMotionBuilder55Limits && isRotationDOFActive && !IsEquivalent(preRotation, FMVector3::Zero))
+		{
+
+			for (int i = 2; i >= 0; --i)
+			{
+				FCDTRotation* rotation = new FCDTRotation(nullptr, NULL);
+				rotation->SetAxis(*rotationAxises[orderedRotationIndices[i]]);
+				rotation->SetAngle(preRotation[orderedRotationIndices[i]]);
+
+				PreRot *= rotation->ToMatrix();
+				delete rotation;
+				rotation = NULL;
+			}
+		}
+
+		FMMatrix44 Rot = FMMatrix44::Identity;
+		// Animatable node rotation
+		if (ANIM->IsAnimated(&node->Rotation) || !IsEquivalent(ToFMVector3(node->Rotation), FMVector3::Zero))
+		{
+			FMVector3 angles = ToFMVector3(node->Rotation);
+			for (int i = 2; i >= 0; --i)
+			{
+				FCDTRotation* rotation = new FCDTRotation(nullptr, NULL);
+				rotation->SetAxis(*rotationAxises[orderedRotationIndices[i]]);
+				rotation->SetAngle(angles[orderedRotationIndices[i]]);
+				Rot *= rotation->ToMatrix();
+
+				delete rotation;
+				rotation = NULL;
+			}
+		}
+
+		// Translation
+		FMMatrix44 Trans = FMMatrix44::Identity;
+		if (ANIM->IsAnimated(&node->Translation) || !IsEquivalent(ToFMVector3(node->Translation), FMVector3::Zero))
+		{
+			FCDTTranslation* translation = new FCDTTranslation(nullptr, NULL);
+			translation->SetTranslation(ToFMVector3(node->Translation)*GetOptions()->getScaleUnit());
+			Trans = translation->ToMatrix();
+
+			delete translation;
+			translation = NULL;
+		}
+
+
+		FMMatrix44 FinalMatrix = Trans * PreRot * Rot;
+
+		FCDTMatrix* colladaTranform = (FCDTMatrix*) colladaNode->AddTransform(FCDTransform::MATRIX);
+		colladaTranform->SetTransform(FinalMatrix);
+		ANIM->AddModelToSample(node, colladaNode, colladaTranform->GetTransform());
+
 	}
 	else
 	{
 		// For decomposed transforms, we need to force sampling if this node has IK.
-		bool forceSampling = HasIK(node);
+		bool forceSampling = GetOptions()->isCharacterControlerUsedToRetrieveIK()? false: HasIK(node);
 
 		// Motion Builder has four animatable transforms: Visibility, Translation,
 		// Rotation and Scaling. It also has a series of non-animatable pivots.
@@ -314,15 +465,16 @@ void NodeExporter::ExportTransforms(FCDSceneNode* colladaNode, FBModel* node)
 		// Consider the rotation order.
 		const int* orderedRotationIndices;
 		const FMVector3* rotationAxises[3] = { &FMVector3::XAxis, &FMVector3::YAxis, &FMVector3::ZAxis };
-		switch ((FBRotationOrder::Values) rotationOrder)
+
+		switch ((Values) rotationOrder)
 		{
-		case FBRotationOrder::EulerXYZ:
-		case FBRotationOrder::SphericXYZ: { static const int x[3] = { 0, 1, 2 }; orderedRotationIndices = x; break; }
-		case FBRotationOrder::EulerXZY: { static const int x[3] = { 0, 2, 1 }; orderedRotationIndices = x; break; }
-		case FBRotationOrder::EulerYZX: { static const int x[3] = { 1, 2, 0 }; orderedRotationIndices = x; break; }
-		case FBRotationOrder::EulerYXZ: { static const int x[3] = { 1, 0, 2 }; orderedRotationIndices = x; break; }
-		case FBRotationOrder::EulerZXY: { static const int x[3] = { 2, 0, 1 }; orderedRotationIndices = x; break; }
-		case FBRotationOrder::EulerZYX: { static const int x[3] = { 2, 1, 0 }; orderedRotationIndices = x; break; }
+		case EulerXYZ:
+		case SphericXYZ: { static const int x[3] = { 0, 1, 2 }; orderedRotationIndices = x; break; }
+		case EulerXZY: { static const int x[3] = { 0, 2, 1 }; orderedRotationIndices = x; break; }
+		case EulerYZX: { static const int x[3] = { 1, 2, 0 }; orderedRotationIndices = x; break; }
+		case EulerYXZ: { static const int x[3] = { 1, 0, 2 }; orderedRotationIndices = x; break; }
+		case EulerZXY: { static const int x[3] = { 2, 0, 1 }; orderedRotationIndices = x; break; }
+		case EulerZYX: { static const int x[3] = { 2, 1, 0 }; orderedRotationIndices = x; break; }
 		default: { static const int x[3] = { 0, 1, 2 }; FUFail(orderedRotationIndices = x); break; }
 		}
 
@@ -342,15 +494,20 @@ void NodeExporter::ExportTransforms(FCDSceneNode* colladaNode, FBModel* node)
 		if (ANIM->IsAnimated(&node->Translation) || !IsEquivalent(ToFMVector3(node->Translation), FMVector3::Zero))
 		{
 			FCDTTranslation* translation = (FCDTTranslation*) colladaNode->AddTransform(FCDTransform::TRANSLATION);
-			translation->SetTranslation(ToFMVector3(node->Translation));
-			ANIMATABLE(&node->Translation, colladaNode, translation->GetTranslation(), -1, NULL, forceSampling);
+			translation->SetTranslation(ToFMVector3(node->Translation)*GetOptions()->getScaleUnit());
+
+			fstring translate("translate");
+			translation->SetSubId(translate);
+
+			FCDConversionScaleFunctor scaleFunc(GetOptions()->getScaleUnit());
+			ANIMATABLE(&node->Translation, colladaNode, translation->GetTranslation(), -1, &scaleFunc, forceSampling);
 		}
 
 		// Rotation Offset
 		if (!IsEquivalent(rotationOffset, FMVector3::Zero))
 		{
 			FCDTTranslation* translate = (FCDTTranslation*) colladaNode->AddTransform(FCDTransform::TRANSLATION);
-			translate->SetTranslation(rotationOffset);
+			translate->SetTranslation(rotationOffset*GetOptions()->getScaleUnit());
 		}
 
 		// Pre-rotation
@@ -361,9 +518,14 @@ void NodeExporter::ExportTransforms(FCDSceneNode* colladaNode, FBModel* node)
 				FCDTRotation* rotation = (FCDTRotation*) colladaNode->AddTransform(FCDTransform::ROTATION);
 				rotation->SetAxis(*rotationAxises[orderedRotationIndices[i]]);
 				rotation->SetAngle(preRotation[orderedRotationIndices[i]]);
+
+				fstring jointOrient("jointOrient");
+				fstring XYZ(orderedRotationIndices[i] == 0 ? "X": orderedRotationIndices[i] == 1 ? "Y": "Z");
+				fstring final(jointOrient + XYZ);
+				rotation->SetSubId(final);
 			}
 		}
-	
+
 		// Scale inheritance. TODO: needs to support all animations on parent scales.
 		if (scaleInheritance == 0 && !IsEquivalent(parentScale, FMVector3::One))
 		{
@@ -375,7 +537,7 @@ void NodeExporter::ExportTransforms(FCDSceneNode* colladaNode, FBModel* node)
 		if (!IsEquivalent(rotationPivot, FMVector3::Zero))
 		{
 			FCDTTranslation* pivotTranslate = (FCDTTranslation*) colladaNode->AddTransform(FCDTransform::TRANSLATION);
-			pivotTranslate->SetTranslation(rotationPivot);
+			pivotTranslate->SetTranslation(rotationPivot*GetOptions()->getScaleUnit());
 		}
 
 		// Animatable node rotation
@@ -387,6 +549,12 @@ void NodeExporter::ExportTransforms(FCDSceneNode* colladaNode, FBModel* node)
 				FCDTRotation* rotation = (FCDTRotation*) colladaNode->AddTransform(FCDTransform::ROTATION);
 				rotation->SetAxis(*rotationAxises[orderedRotationIndices[i]]);
 				rotation->SetAngle(angles[orderedRotationIndices[i]]);
+
+				fstring rotate("rotate");
+				fstring XYZ(orderedRotationIndices[i] == 0 ? "X" : orderedRotationIndices[i] == 1 ? "Y" : "Z");
+				fstring final(rotate + XYZ);
+				rotation->SetSubId(final);
+
 				ANIMATABLE_INDEXED_ANGLE(&node->Rotation, orderedRotationIndices[i], colladaNode, rotation->GetAngleAxis(), -1, NULL, forceSampling);
 			}
 		}
@@ -395,7 +563,7 @@ void NodeExporter::ExportTransforms(FCDSceneNode* colladaNode, FBModel* node)
 		if (!IsEquivalent(rotationPivot, FMVector3::Zero))
 		{
 			FCDTTranslation* pivotTranslate = (FCDTTranslation*) colladaNode->AddTransform(FCDTransform::TRANSLATION);
-			pivotTranslate->SetTranslation(-rotationPivot);
+			pivotTranslate->SetTranslation(-rotationPivot*GetOptions()->getScaleUnit());
 		}
 
 		// Scale inheritance. TODO: needs to support all animations on parent scales.
@@ -420,21 +588,21 @@ void NodeExporter::ExportTransforms(FCDSceneNode* colladaNode, FBModel* node)
 		if (!IsEquivalent(scaleOffset, FMVector3::Zero))
 		{
 			FCDTTranslation* translate = (FCDTTranslation*) colladaNode->AddTransform(FCDTransform::TRANSLATION);
-			translate->SetTranslation(scaleOffset);
+			translate->SetTranslation(scaleOffset*GetOptions()->getScaleUnit());
 		}
 
 		// Scale Pivot updated offset
 		if (!IsEquivalent(scalePivotUpdateOffset, FMVector3::Zero))
 		{
 			FCDTTranslation* pivotTranslate = (FCDTTranslation*) colladaNode->AddTransform(FCDTransform::TRANSLATION);
-			pivotTranslate->SetTranslation(scalePivotUpdateOffset);
+			pivotTranslate->SetTranslation(scalePivotUpdateOffset*GetOptions()->getScaleUnit());
 		}
 
 		// Scale Pivot 
 		if (!IsEquivalent(scalePivot, FMVector3::Zero))
 		{
 			FCDTTranslation* pivotTranslate = (FCDTTranslation*) colladaNode->AddTransform(FCDTransform::TRANSLATION);
-			pivotTranslate->SetTranslation(scalePivot);
+			pivotTranslate->SetTranslation(scalePivot*GetOptions()->getScaleUnit());
 		}
 
 		// Scale
@@ -449,14 +617,14 @@ void NodeExporter::ExportTransforms(FCDSceneNode* colladaNode, FBModel* node)
 		if (!IsEquivalent(scalePivot, FMVector3::Zero))
 		{
 			FCDTTranslation* pivotTranslate = (FCDTTranslation*) colladaNode->AddTransform(FCDTransform::TRANSLATION);
-			pivotTranslate->SetTranslation(-scalePivot);
+			pivotTranslate->SetTranslation(-scalePivot*GetOptions()->getScaleUnit());
 		}
 
 		// Scale Pivot updated offset Reverse
 		if (!IsEquivalent(scalePivotUpdateOffset, FMVector3::Zero))
 		{
 			FCDTTranslation* pivotTranslate = (FCDTTranslation*) colladaNode->AddTransform(FCDTransform::TRANSLATION);
-			pivotTranslate->SetTranslation(-scalePivotUpdateOffset);
+			pivotTranslate->SetTranslation(-scalePivotUpdateOffset*GetOptions()->getScaleUnit());
 		}
 	}
 
@@ -482,7 +650,7 @@ FCDSceneNode* NodeExporter::ExportPivot(FCDSceneNode* colladaNode, FBModel* node
 	if (!IsEquivalent(pivotTranslation, FMVector3::Zero))
 	{
 		FCDTTranslation* translation = (FCDTTranslation*) colladaPivot->AddTransform(FCDTransform::TRANSLATION);
-		translation->SetTranslation(pivotTranslation);
+		translation->SetTranslation(pivotTranslation*GetOptions()->getScaleUnit());
 	}
 	if (!IsEquivalent(pivotRotation, FMVector3::Zero))
 	{
@@ -587,7 +755,9 @@ FMMatrix44 NodeExporter::GetParentTransform(FBModel* node, bool isLocal)
 	{
 		FMMatrix44 mx;
 		FBCamera* camera = (FBCamera*) node;
-		mx = camera->GetMatrix(kFBModelView);
+		FBMatrix mx1;
+		camera->GetCameraMatrix(mx1, kFBModelView);
+		mx = ToFMMatrix44(mx1);
 		mx = mx.Transposed();
 		if (isLocal)
 		{
@@ -615,10 +785,10 @@ void NodeExporter::FindNodesToSample(FBScene* scene)
 		int markerPlacementCount = (int) kFBLastNodeId;
 		for (int j = 0; j < markerPlacementCount; ++j)
 		{
-			int markerCount = markers->GetMarkerCount((FBBodyNodeId) j);
+			int markerCount = markers->GetMarkerCount((FBSkeletonNodeId) j);
 			for (int k = 0; k < markerCount; ++k)
 			{
-				FBModel* marker = markers->GetMarkerModel((FBBodyNodeId) j, k);
+				FBModel* marker = markers->GetMarkerModel((FBSkeletonNodeId) j, k);
 				if (marker == NULL) continue;
 
 				// Don't insert the marker to be sampled, but insert all its parents.
@@ -636,6 +806,15 @@ void NodeExporter::FindNodesToSample(FBScene* scene)
 	for (int i = 0; i < characterCount; ++i)
 	{
 		FBCharacter* character = scene->Characters[i];
+
+		FBModel* hipsEffectorModel = character->GetEffectorModel(FBEffectorId::kFBHipsEffectorId);
+		FBComponent* hipsEntity = (FBComponent*)hipsEffectorModel;
+		fm::string fullName = (const char*)hipsEntity->GetFullName();
+		std::size_t found = fullName.find_last_of(":");
+
+		GetCharactersNamespace()->push_back(fullName.substr(0, found));
+
+
 		int markerPlacementCount = (int) kFBLastNodeId;
 		for (int j = 0; j < markerPlacementCount; ++j)
 		{
@@ -648,11 +827,11 @@ void NodeExporter::FindNodesToSample(FBScene* scene)
 	}
 
 	// Check for Constraints
-	FBConstraintManager constraintManager;
-	int constraintCount = constraintManager.ConstraintGetCount();
+	FBConstraintManager& constraintManager = FBConstraintManager::TheOne();
+	int constraintCount = constraintManager.TypeGetCount();
 	for (int i = 0; i < constraintCount; ++i)
 	{
-		FBConstraint* constraint = constraintManager.ConstraintGet(i);
+		FBConstraint* constraint = constraintManager.TypeCreateConstraint(i);
 		int groupCount = constraint->ReferenceGroupGetCount();
 		if (groupCount >= 2)
 		{

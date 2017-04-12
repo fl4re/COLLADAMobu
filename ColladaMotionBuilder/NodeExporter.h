@@ -28,7 +28,26 @@ private:
 	ExportedNodeMap exportedNodes;
 	NodeSet nodesToSample;
 
+
+	typedef fm::vector<const char *> BoneListName;
+	BoneListName* boneNameExported;
+
+	typedef fm::vector<fm::string> nameSpaceList;
+	nameSpaceList characterNamesSpace;
+
 public:
+
+	enum Values
+	{
+		EulerXYZ = 0,
+		EulerXZY,
+		EulerYZX,
+		EulerYXZ,
+		EulerZXY,
+		EulerZYX,
+		SphericXYZ
+	};
+
 	NodeExporter(ColladaExporter* base);
 	virtual ~NodeExporter();
 
@@ -49,25 +68,17 @@ public:
 	// Cameras have annoying transforms. Need to encapsulate the transform retrieval.
 	FMMatrix44 GetParentTransform(FBModel* node, bool isLocal=true);
 
+	void SetBoneListToExport(BoneListName* list){ boneNameExported = list; }
+
+
+
+	nameSpaceList* GetCharactersNamespace() { return &characterNamesSpace; }
+
 private:
 	void ExportTransforms(FCDSceneNode* colladaNode, FBModel* node);
 	void PostProcessNode(FCDSceneNode* colladaNode);
 	void FindNodesToSample(FBScene* scene);
 	bool HasIK(FBModel* node);
 };
-
-namespace FBRotationOrder
-{
-	enum Values
-	{
-		EulerXYZ = 0,
-		EulerXZY,
-		EulerYZX,
-		EulerYXZ,
-		EulerZXY,
-		EulerZYX,
-		SphericXYZ
-	};
-}
 
 #endif // _NODE_EXPORTER_H_

@@ -95,7 +95,7 @@ public:
 		return true;
 	}
 
-	void OnExportClicked()
+	void OnExportClicked(HISender pSender, HKEvent pEvent)
 	{
 		// Retrieve the frame time.
 		FBPlayerControl controller;
@@ -115,15 +115,21 @@ public:
 		if (fileChooser.Execute())
 		{
 			// Recover the export options.
+			GetOptions()->useBoneList = false;
+			GetOptions()->useCharacterControlerToRetrieveIK = false;
+			GetOptions()->exportOnlyAnimAndScene = false;
+			GetOptions()->exportBakedMatrix = false;
+			GetOptions()->exportClipAnimation = false;
+			GetOptions()->scaleUnit = 1.0f;
 			GetOptions()->exportTriangleStrips = (stripsCheckBox.State == 1);
 			GetOptions()->export3dData = (data3dCheckBox.State == 1);
 			GetOptions()->exportSystemCameras = (systemCamerasCheckBox.State == 1);
 			GetOptions()->forceSampling = (forceSamplingCheckBox.State == 1);
 			GetOptions()->hasSamplingInterval = ((FBString) samplingStartEdit.Text != "" || (FBString) samplingEndEdit.Text != "");
 			if ((FBString) samplingStartEdit.Text == "") GetOptions()->samplingStart = ToSeconds(controller.LoopStart) / samplePeriod;
-			else GetOptions()->samplingStart = FUStringConversion::ToInt32((char*) samplingStartEdit.Text);
+			else GetOptions()->samplingStart = FUStringConversion::ToInt32((char*) samplingStartEdit.Text.AsString());
 			if ((FBString) samplingEndEdit.Text == "") GetOptions()->samplingEnd = ToSeconds(controller.LoopStop) / samplePeriod;
-			else GetOptions()->samplingEnd = FUStringConversion::ToInt32((char*) samplingEndEdit.Text);
+			else GetOptions()->samplingEnd = FUStringConversion::ToInt32((char*) samplingEndEdit.Text.AsString());
 
 			// Generate and export the document.
 			statusLabel.Caption = "Starting Export Process...";

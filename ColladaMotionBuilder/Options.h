@@ -9,6 +9,9 @@
 #ifndef _COLLADA_MB_OPTIONS_H_
 #define _COLLADA_MB_OPTIONS_H_
 
+#define ScaleMeterToCM 1.0f
+#define ScaleCMToMeter 0.01f
+
 // Only one of these should be contained at the FBToolLibrary level..
 class ColladaOptions
 {
@@ -22,6 +25,14 @@ private:
 	bool hasSamplingInterval;
 	int samplingStart;
 	int samplingEnd;
+	bool useCharacterControlerToRetrieveIK;
+
+	bool useBoneList;
+	bool exportOnlyAnimAndScene;
+	bool exportBakedMatrix;
+	bool exportClipAnimation;
+
+	float scaleUnit;
 
 public:
 	ColladaOptions(); // Reads in from the INI file.
@@ -46,6 +57,24 @@ public:
 	inline bool HasSamplingInterval() { return hasSamplingInterval; }
 	inline int SamplingStart() { return samplingStart; }
 	inline int SamplingEnd() { return samplingEnd; }
+
+	inline void setForceSampling(bool val){ forceSampling = val; }
+	inline void setSamplingStart(float val){ samplingStart = val; }
+	inline void setSamplingEnd(float val){ samplingEnd = val; }
+	inline void setCharacterControlerToRetrieveIK(bool val) { useCharacterControlerToRetrieveIK = val; }
+
+	inline bool isUsingBoneList(){ return useBoneList; }
+	inline bool isExportingOnlyAnimAndScene(){ return exportOnlyAnimAndScene; }
+	inline bool isExportingBakedMatrix(){ return exportBakedMatrix; }
+	inline bool isCharacterControlerUsedToRetrieveIK(){ return useCharacterControlerToRetrieveIK; }
+	inline float getScaleUnit() { return scaleUnit; }
+	inline bool isExportingClipAnimation() { return exportClipAnimation; }
+
+	inline void setBoneList(bool val){ useBoneList = val; }
+	inline void setExportingOnlyAnimAndScene(bool val){ exportOnlyAnimAndScene = val; }
+	inline void setExportingBakedMatrix(bool val){ exportBakedMatrix = val; }
+	inline void setsScaleUnit(float val) { scaleUnit = val; }
+	inline void setExportingClipAnimation(bool val) { exportClipAnimation = val; }
 
 private:
 	// Only the tool should modify this singleton.
